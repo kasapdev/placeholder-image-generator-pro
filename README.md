@@ -1,6 +1,6 @@
 # Placeholder Image Generator Pro
 
-[![CI](https://github.com/kasapdev/placeholder-image-generator-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/kasapdev/placeholder-image-generator-pro/actions/workflows/ci.yml)
+[![CI](https://github.com/kasapdev/placeholder-image-generator-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/kasapdev/placeholder-image-generator-pro/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) ![Vanilla JS](https://img.shields.io/badge/Vanilla-JS-F7DF1E?logo=javascript&logoColor=black)
 
 Generate placeholder images entirely in your browser via `<canvas>` — no third-party API, no network calls.
 
