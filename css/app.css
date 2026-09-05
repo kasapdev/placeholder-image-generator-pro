@@ -1,0 +1,111 @@
+/* =====================================================================
+   Placeholder Image Generator Pro — app.css
+   Extends the shared design system (base.css). Colors derive ONLY from
+   base.css CSS variables so dark + light themes both work.
+   ===================================================================== */
+
+[data-theme="light"] .icon-sun { display: none; }
+.icon-moon { display: none; }
+[data-theme="light"] .icon-moon { display: inline-block; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: var(--space-5);
+  margin-top: var(--space-5);
+  align-items: start;
+}
+
+.controls-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  position: sticky;
+  top: var(--space-5);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+}
+.preset-btn { white-space: nowrap; }
+
+#bgModeSeg, #patternSeg { width: 100%; }
+#bgModeSeg button, #patternSeg button { flex: 1; }
+
+input[type="color"] {
+  width: 48px;
+  height: 38px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--brand-500, #6366f1);
+}
+
+.preview-panel { padding: 0; overflow: hidden; }
+.pane-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+}
+.pane-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.pane-meta { font-size: 12px; }
+
+.canvas-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background:
+    linear-gradient(45deg, var(--surface-2) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--surface-2) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--surface-2) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--surface-2) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  min-height: 260px;
+  overflow: auto;
+}
+#canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  background: #fff;
+}
+
+.snippet-panel { padding: 0; overflow: hidden; }
+.output-code {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow: auto;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .controls-panel { position: static; }
+}
