@@ -1,327 +1,479 @@
 /* =====================================================================
    Placeholder Image Generator Pro — app.js
-   Generates placeholder images entirely via <canvas>. No network calls.
-   Classic script (no modules). Depends on window.WUS (core.js).
+   Generates placeholder images entirely via <canvas>. Zero network
+   calls, zero dependencies. Classic script (no modules).
+   Depends on window.WUS (core.js).
    ===================================================================== */
 (function () {
   'use strict';
 
   var WUS = window.WUS;
-  var STORE_KEY = 'placeholder.state';
+  var STORE_KEY = 'placeholderimg.state';
 
   /* ----------------------------- DOM refs ---------------------------- */
-  var canvas = document.getElementById('canvas');
+  var canvas = document.getElementById('previewCanvas');
   var ctx = canvas.getContext('2d');
 
+  var dimsBadge = document.getElementById('dimsBadge');
+
+  var presetRow = document.getElementById('presetRow');
   var widthInput = document.getElementById('widthInput');
   var heightInput = document.getElementById('heightInput');
-  var presetGrid = document.getElementById('presetGrid');
 
-  var bgModeSeg = document.getElementById('bgModeSeg');
-  var bgSolidRow = document.getElementById('bgSolidRow');
-  var bgGradientRow = document.getElementById('bgGradientRow');
-  var bgColor = document.getElementById('bgColor');
+  var bgTypeSolid = document.getElementById('bgTypeSolid');
+  var bgTypeGradient = document.getElementById('bgTypeGradient');
+  var solidControls = document.getElementById('solidControls');
+  var gradientControls = document.getElementById('gradientControls');
+  var solidColor = document.getElementById('solidColor');
   var gradColor1 = document.getElementById('gradColor1');
   var gradColor2 = document.getElementById('gradColor2');
   var gradAngle = document.getElementById('gradAngle');
-  var gradAngleVal = document.getElementById('gradAngleVal');
+  var gradAngleNumber = document.getElementById('gradAngleNumber');
+  var gradAngleLabel = document.getElementById('gradAngleLabel');
 
   var textInput = document.getElementById('textInput');
+  var textAutoToggle = document.getElementById('textAutoToggle');
   var fontFamily = document.getElementById('fontFamily');
   var fontSize = document.getElementById('fontSize');
-  var fontSizeVal = document.getElementById('fontSizeVal');
+  var fontAutoFit = document.getElementById('fontAutoFit');
   var textColor = document.getElementById('textColor');
 
-  var patternSeg = document.getElementById('patternSeg');
-  var patternOptsRow = document.getElementById('patternOptsRow');
+  var patternSelect = document.getElementById('patternSelect');
+  var patternControls = document.getElementById('patternControls');
   var patternColor = document.getElementById('patternColor');
   var patternOpacity = document.getElementById('patternOpacity');
-  var patternOpacityVal = document.getElementById('patternOpacityVal');
+  var patternOpacityLabel = document.getElementById('patternOpacityLabel');
+  var patternDensity = document.getElementById('patternDensity');
+  var patternDensityLabel = document.getElementById('patternDensityLabel');
+  var btnShuffleNoise = document.getElementById('btnShuffleNoise');
 
   var btnDownload = document.getElementById('btnDownload');
-  var btnReset = document.getElementById('btnReset');
+  var btnResetAll = document.getElementById('btnResetAll');
 
-  var statusText = document.getElementById('statusText');
-  var dimsMeta = document.getElementById('dimsMeta');
-
-  var imgSnippet = document.getElementById('imgSnippet');
-  var cssSnippet = document.getElementById('cssSnippet');
+  var imgSnippetEl = document.getElementById('imgSnippet');
+  var cssSnippetEl = document.getElementById('cssSnippet');
   var btnCopyImg = document.getElementById('btnCopyImg');
   var btnCopyCss = document.getElementById('btnCopyCss');
 
-  /* ----------------------------- State -------------------------------- */
-  var state = {
+  /* ----------------------------- Defaults ----------------------------- */
+  var DEFAULT_STATE = {
     width: 300,
     height: 200,
-    bgMode: 'solid',
-    bgColor: '#6366f1',
+    bgType: 'solid',
+    bgColor1: '#6366f1',
     gradColor1: '#6366f1',
-    gradColor2: '#ec4899',
-    gradAngle: 45,
-    text: '',
-    textDirty: false,
-    fontFamily: "'Segoe UI', Arial, sans-serif",
-    fontSize: 0, // 0 = auto
+    gradColor2: '#d946ef',
+    gradAngle: 135,
+    text: '300 × 200',
+    textManual: false,
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: 28,
+    fontAutoFit: true,
     textColor: '#ffffff',
     pattern: 'none',
     patternColor: '#ffffff',
-    patternOpacity: 20
+    patternOpacity: 25,
+    patternDensity: 50,
+    noiseSeed: 1
   };
 
-  function defaultText() {
+  var state = {};
+
+  /* Last generated outputs, kept in full (untruncated) for copy/download. */
+  var lastDataUrl = '';
+  var lastImgTag = '';
+  var lastCssSnippet = '';
+
+  /* ============================= HELPERS ============================== */
+  function clamp(n, min, max) { return Math.min(max, Math.max(min, n)); }
+
+  function computeAutoText() {
     return state.width + ' × ' + state.height;
   }
 
-  /* ============================= DRAWING ============================= */
-  function drawBackground() {
-    if (state.bgMode === 'gradient') {
-      var rad = (state.gradAngle - 90) * Math.PI / 180;
-      var cx = state.width / 2, cy = state.height / 2;
-      var len = Math.abs(state.width * Math.cos(rad)) + Math.abs(state.height * Math.sin(rad));
-      var dx = Math.cos(rad) * len / 2;
-      var dy = Math.sin(rad) * len / 2;
+  /* Deterministic PRNG so noise dot positions stay stable while unrelated
+     controls change, and only move when dimensions/density/seed change. */
+  function mulberry32(seed) {
+    var s = seed >>> 0;
+    return function () {
+      s = (s + 0x6D2B79F5) | 0;
+      var t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function mapRange(v, inMin, inMax, outMin, outMax) {
+    var t = (v - inMin) / (inMax - inMin);
+    return outMin + t * (outMax - outMin);
+  }
+
+  function humanBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    return (n / (1024 * 1024)).toFixed(2) + ' MB';
+  }
+
+  /* Approximate decoded byte size of a base64 data URL without an async
+     Blob round-trip. */
+  function approxDataUrlBytes(dataUrl) {
+    var idx = dataUrl.indexOf('base64,');
+    if (idx < 0) return dataUrl.length;
+    var b64 = dataUrl.slice(idx + 7);
+    var len = b64.length;
+    var padding = 0;
+    if (b64.slice(-2) === '==') padding = 2;
+    else if (b64.slice(-1) === '=') padding = 1;
+    return Math.max(0, Math.floor((len * 3) / 4) - padding);
+  }
+
+  /* Truncate a long data URI for display only; copy always uses the full
+     untruncated string kept in lastImgTag. */
+  function truncateDataUrl(url, keep) {
+    if (url.length <= keep * 2 + 24) return url;
+    return url.slice(0, keep) + '…' + url.slice(-16);
+  }
+
+  /* ============================= DRAWING =============================== */
+  function drawBackground(w, h) {
+    if (state.bgType === 'gradient') {
+      var angleRad = (state.gradAngle * Math.PI) / 180;
+      var cx = w / 2, cy = h / 2;
+      var len = Math.sqrt(w * w + h * h) / 2;
+      // CSS linear-gradient angle convention: 0deg = to top, clockwise.
+      var dx = Math.sin(angleRad) * len;
+      var dy = -Math.cos(angleRad) * len;
       var grad = ctx.createLinearGradient(cx - dx, cy - dy, cx + dx, cy + dy);
       grad.addColorStop(0, state.gradColor1);
       grad.addColorStop(1, state.gradColor2);
       ctx.fillStyle = grad;
     } else {
-      ctx.fillStyle = state.bgColor;
+      ctx.fillStyle = state.bgColor1;
     }
-    ctx.fillRect(0, 0, state.width, state.height);
+    ctx.fillRect(0, 0, w, h);
   }
 
-  function hexToRgba(hex, alpha) {
-    var h = hex.replace('#', '');
-    if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
-    var r = parseInt(h.substring(0, 2), 16);
-    var g = parseInt(h.substring(2, 4), 16);
-    var b = parseInt(h.substring(4, 6), 16);
-    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
-  }
-
-  function drawPattern() {
+  function drawPattern(w, h) {
     if (state.pattern === 'none') return;
-    var alpha = state.patternOpacity / 100;
-    var color = hexToRgba(state.patternColor, alpha);
+    ctx.save();
+    ctx.globalAlpha = state.patternOpacity / 100;
+    ctx.fillStyle = state.patternColor;
+    ctx.strokeStyle = state.patternColor;
 
     if (state.pattern === 'stripes') {
+      var spacing = mapRange(state.patternDensity, 1, 100, 64, 8);
+      var stripeWidth = spacing / 2;
+      var diag = Math.sqrt(w * w + h * h);
       ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = Math.max(2, Math.round(state.width / 60));
-      var gap = ctx.lineWidth * 2.5;
-      ctx.beginPath();
-      var diag = state.width + state.height;
-      for (var x = -state.height; x < diag; x += gap) {
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x + state.height, state.height);
+      ctx.translate(w / 2, h / 2);
+      ctx.rotate(Math.PI / 4);
+      for (var x = -diag; x < diag; x += spacing) {
+        ctx.fillRect(x, -diag, stripeWidth, diag * 2);
       }
-      ctx.stroke();
       ctx.restore();
     } else if (state.pattern === 'grid') {
-      ctx.save();
-      ctx.strokeStyle = color;
+      var step = mapRange(state.patternDensity, 1, 100, 90, 12);
       ctx.lineWidth = 1;
-      var step = Math.max(10, Math.round(Math.min(state.width, state.height) / 15));
       ctx.beginPath();
-      for (var gx = 0; gx <= state.width; gx += step) {
-        ctx.moveTo(gx + 0.5, 0);
-        ctx.lineTo(gx + 0.5, state.height);
+      for (var gx = 0; gx <= w; gx += step) {
+        ctx.moveTo(Math.round(gx) + 0.5, 0);
+        ctx.lineTo(Math.round(gx) + 0.5, h);
       }
-      for (var gy = 0; gy <= state.height; gy += step) {
-        ctx.moveTo(0, gy + 0.5);
-        ctx.lineTo(state.width, gy + 0.5);
+      for (var gy = 0; gy <= h; gy += step) {
+        ctx.moveTo(0, Math.round(gy) + 0.5);
+        ctx.lineTo(w, Math.round(gy) + 0.5);
       }
       ctx.stroke();
-      ctx.restore();
     } else if (state.pattern === 'noise') {
-      ctx.save();
-      var count = Math.round((state.width * state.height) / 250);
+      var rand = mulberry32(state.noiseSeed);
+      var count = Math.round(((w * h) / 5500) * (state.patternDensity / 50));
+      count = clamp(count, 0, 20000);
       for (var i = 0; i < count; i++) {
-        var px = Math.random() * state.width;
-        var py = Math.random() * state.height;
-        var r = Math.random() * 1.6 + 0.4;
-        ctx.fillStyle = hexToRgba(state.patternColor, alpha * (0.3 + Math.random() * 0.7));
+        var rx = rand() * w;
+        var ry = rand() * h;
+        var rr = 0.5 + rand() * 2.2;
         ctx.beginPath();
-        ctx.arc(px, py, r, 0, Math.PI * 2);
+        ctx.arc(rx, ry, rr, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.restore();
     }
+    ctx.restore();
   }
 
-  function drawText() {
-    var text = state.text || defaultText();
+  function drawText(w, h) {
+    var text = state.text || '';
     if (!text) return;
-    var size = state.fontSize > 0 ? state.fontSize : Math.max(12, Math.round(Math.min(state.width, state.height) / 6));
     ctx.save();
     ctx.fillStyle = state.textColor;
-    ctx.font = '600 ' + size + 'px ' + state.fontFamily;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Shrink font to fit width with some padding, if needed.
-    var maxWidth = state.width * 0.9;
-    var measured = ctx.measureText(text).width;
-    if (measured > maxWidth && measured > 0) {
-      var scale = maxWidth / measured;
-      var newSize = Math.max(8, Math.floor(size * scale));
-      ctx.font = '600 ' + newSize + 'px ' + state.fontFamily;
+    var size = clamp(Number(state.fontSize) || 28, 8, 400);
+    if (state.fontAutoFit) {
+      var maxWidth = w * 0.86;
+      var startSize = clamp(Math.round(h * 0.5), 8, 400);
+      ctx.font = startSize + 'px ' + state.fontFamily;
+      var measured = ctx.measureText(text).width;
+      if (measured > maxWidth && measured > 0) {
+        size = Math.max(8, Math.floor(startSize * (maxWidth / measured)));
+      } else {
+        size = startSize;
+      }
     }
-
-    ctx.fillText(text, state.width / 2, state.height / 2);
+    ctx.font = size + 'px ' + state.fontFamily;
+    ctx.fillText(text, w / 2, h / 2, w * 0.94);
     ctx.restore();
   }
 
   function render() {
-    canvas.width = state.width;
-    canvas.height = state.height;
-    ctx.clearRect(0, 0, state.width, state.height);
-    drawBackground();
-    drawPattern();
-    drawText();
-
-    statusText.textContent = state.width + ' × ' + state.height;
-    dimsMeta.textContent = state.width + ' × ' + state.height;
-
-    updateSnippets();
-    persist();
+    var w = state.width, h = state.height;
+    canvas.width = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    drawBackground(w, h);
+    drawPattern(w, h);
+    drawText(w, h);
+    updateOutputs();
   }
 
-  /* ============================= SNIPPETS ============================= */
-  function updateSnippets() {
+  /* ============================= OUTPUTS =============================== */
+  function updateOutputs() {
     var dataUrl = canvas.toDataURL('image/png');
-    var alt = (state.text || defaultText()).replace(/"/g, '&quot;');
-    imgSnippet.textContent = '<img src="' + dataUrl + '" width="' + state.width + '" height="' + state.height + '" alt="' + alt + '">';
-    cssSnippet.textContent =
+    lastDataUrl = dataUrl;
+
+    var bytes = approxDataUrlBytes(dataUrl);
+    dimsBadge.textContent = state.width + ' × ' + state.height + ' · ' + humanBytes(bytes);
+
+    var altText = WUS.escapeHtml(state.text || 'placeholder');
+    lastImgTag = '<img src="' + dataUrl + '" width="' + state.width + '" height="' + state.height + '" alt="' + altText + '">';
+    var displayTag = '<img src="' + truncateDataUrl(dataUrl, 48) + '" width="' + state.width + '" height="' + state.height + '" alt="' + altText + '">';
+    imgSnippetEl.textContent = displayTag + '\n\n/* Data URI truncated for display — Copy grabs the full snippet (' + humanBytes(bytes) + '). */';
+
+    var cssBg = state.bgType === 'gradient'
+      ? 'linear-gradient(' + state.gradAngle + 'deg, ' + state.gradColor1 + ', ' + state.gradColor2 + ')'
+      : state.bgColor1;
+    lastCssSnippet =
       '.placeholder {\n' +
       '  width: ' + state.width + 'px;\n' +
       '  height: ' + state.height + 'px;\n' +
-      '  background-image: url("' + dataUrl + '");\n' +
-      '  background-size: cover;\n' +
+      '  background: ' + cssBg + ';\n' +
       '}';
+    cssSnippetEl.textContent = lastCssSnippet;
+
+    persistDebounced();
   }
 
-  /* ============================ CONTROLS =============================== */
-  function setDimensions(w, h) {
-    state.width = WUS.clamp(Math.round(w) || 1, 1, 4000);
-    state.height = WUS.clamp(Math.round(h) || 1, 1, 4000);
+  /* ============================ UI <-> STATE ============================ */
+  function updatePresetActiveState() {
+    var btns = presetRow.querySelectorAll('.preset-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      var match = Number(b.dataset.w) === state.width && Number(b.dataset.h) === state.height;
+      b.classList.toggle('is-active', match);
+    }
+  }
+
+  function syncAutoText() {
+    if (!state.textManual) {
+      state.text = computeAutoText();
+      textInput.value = state.text;
+    }
+  }
+
+  function applyStateToInputs() {
     widthInput.value = state.width;
     heightInput.value = state.height;
-    if (!state.textDirty) textInput.placeholder = defaultText();
-    render();
+    updatePresetActiveState();
+
+    bgTypeSolid.classList.toggle('is-active', state.bgType === 'solid');
+    bgTypeSolid.setAttribute('aria-selected', String(state.bgType === 'solid'));
+    bgTypeGradient.classList.toggle('is-active', state.bgType === 'gradient');
+    bgTypeGradient.setAttribute('aria-selected', String(state.bgType === 'gradient'));
+    solidControls.hidden = state.bgType !== 'solid';
+    gradientControls.hidden = state.bgType !== 'gradient';
+    solidColor.value = state.bgColor1;
+    gradColor1.value = state.gradColor1;
+    gradColor2.value = state.gradColor2;
+    gradAngle.value = state.gradAngle;
+    gradAngleNumber.value = state.gradAngle;
+    gradAngleLabel.textContent = state.gradAngle + '°';
+
+    textInput.value = state.text;
+    textAutoToggle.checked = !state.textManual;
+    fontFamily.value = state.fontFamily;
+    fontSize.value = state.fontSize;
+    fontSize.disabled = !!state.fontAutoFit;
+    fontAutoFit.checked = !!state.fontAutoFit;
+    textColor.value = state.textColor;
+
+    patternSelect.value = state.pattern;
+    patternControls.hidden = state.pattern === 'none';
+    btnShuffleNoise.hidden = state.pattern !== 'noise';
+    patternColor.value = state.patternColor;
+    patternOpacity.value = state.patternOpacity;
+    patternOpacityLabel.textContent = state.patternOpacity + '%';
+    patternDensity.value = state.patternDensity;
+    patternDensityLabel.textContent = state.patternDensity + '%';
   }
 
-  presetGrid.addEventListener('click', function (e) {
-    var btn = e.target.closest('.preset-btn');
+  /* ============================== EVENTS ================================ */
+  presetRow.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.preset-btn') : null;
     if (!btn) return;
-    setDimensions(Number(btn.dataset.w), Number(btn.dataset.h));
-    WUS.toast('Loaded ' + btn.dataset.w + '×' + btn.dataset.h);
-  });
-
-  widthInput.addEventListener('input', function () { setDimensions(Number(widthInput.value), state.height); });
-  heightInput.addEventListener('input', function () { setDimensions(state.width, Number(heightInput.value)); });
-
-  bgModeSeg.addEventListener('click', function (e) {
-    var btn = e.target.closest('button');
-    if (!btn) return;
-    state.bgMode = btn.dataset.mode;
-    Array.prototype.forEach.call(bgModeSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b === btn));
-    });
-    bgSolidRow.hidden = state.bgMode !== 'solid';
-    bgGradientRow.hidden = state.bgMode !== 'gradient';
+    state.width = Number(btn.dataset.w);
+    state.height = Number(btn.dataset.h);
+    widthInput.value = state.width;
+    heightInput.value = state.height;
+    updatePresetActiveState();
+    syncAutoText();
     render();
+    persist();
   });
 
-  bgColor.addEventListener('input', function () { state.bgColor = bgColor.value; render(); });
-  gradColor1.addEventListener('input', function () { state.gradColor1 = gradColor1.value; render(); });
-  gradColor2.addEventListener('input', function () { state.gradColor2 = gradColor2.value; render(); });
-  gradAngle.addEventListener('input', function () {
-    state.gradAngle = Number(gradAngle.value);
-    gradAngleVal.textContent = state.gradAngle;
+  function onDimInput() {
+    var wv = parseInt(widthInput.value, 10);
+    var hv = parseInt(heightInput.value, 10);
+    if (!isNaN(wv) && wv > 0) state.width = Math.min(4096, wv);
+    if (!isNaN(hv) && hv > 0) state.height = Math.min(4096, hv);
+    updatePresetActiveState();
+    syncAutoText();
     render();
-  });
+    persistDebounced();
+  }
+  widthInput.addEventListener('input', onDimInput);
+  heightInput.addEventListener('input', onDimInput);
+  widthInput.addEventListener('change', function () { widthInput.value = state.width; });
+  heightInput.addEventListener('change', function () { heightInput.value = state.height; });
+
+  function setBgType(type) {
+    state.bgType = type;
+    bgTypeSolid.classList.toggle('is-active', type === 'solid');
+    bgTypeSolid.setAttribute('aria-selected', String(type === 'solid'));
+    bgTypeGradient.classList.toggle('is-active', type === 'gradient');
+    bgTypeGradient.setAttribute('aria-selected', String(type === 'gradient'));
+    solidControls.hidden = type !== 'solid';
+    gradientControls.hidden = type !== 'gradient';
+    render();
+    persist();
+  }
+  bgTypeSolid.addEventListener('click', function () { setBgType('solid'); });
+  bgTypeGradient.addEventListener('click', function () { setBgType('gradient'); });
+
+  solidColor.addEventListener('input', function () { state.bgColor1 = solidColor.value; render(); persistDebounced(); });
+  gradColor1.addEventListener('input', function () { state.gradColor1 = gradColor1.value; render(); persistDebounced(); });
+  gradColor2.addEventListener('input', function () { state.gradColor2 = gradColor2.value; render(); persistDebounced(); });
+
+  function syncAngle(v) {
+    v = clamp(parseInt(v, 10) || 0, 0, 360);
+    state.gradAngle = v;
+    gradAngle.value = v;
+    gradAngleNumber.value = v;
+    gradAngleLabel.textContent = v + '°';
+    render();
+    persistDebounced();
+  }
+  gradAngle.addEventListener('input', function () { syncAngle(gradAngle.value); });
+  gradAngleNumber.addEventListener('input', function () { syncAngle(gradAngleNumber.value); });
 
   textInput.addEventListener('input', function () {
     state.text = textInput.value;
-    state.textDirty = textInput.value.length > 0;
+    if (state.text !== computeAutoText()) {
+      state.textManual = true;
+      textAutoToggle.checked = false;
+    } else {
+      state.textManual = false;
+      textAutoToggle.checked = true;
+    }
     render();
+    persistDebounced();
   });
 
-  fontFamily.addEventListener('change', function () { state.fontFamily = fontFamily.value; render(); });
+  textAutoToggle.addEventListener('change', function () {
+    state.textManual = !textAutoToggle.checked;
+    if (!state.textManual) {
+      state.text = computeAutoText();
+      textInput.value = state.text;
+    }
+    render();
+    persist();
+  });
+
+  fontFamily.addEventListener('change', function () { state.fontFamily = fontFamily.value; render(); persist(); });
+
   fontSize.addEventListener('input', function () {
-    state.fontSize = Number(fontSize.value);
-    fontSizeVal.textContent = state.fontSize > 0 ? state.fontSize + 'px' : '(auto)';
+    if (state.fontAutoFit) return;
+    state.fontSize = clamp(parseInt(fontSize.value, 10) || 28, 8, 400);
     render();
-  });
-  textColor.addEventListener('input', function () { state.textColor = textColor.value; render(); });
-
-  patternSeg.addEventListener('click', function (e) {
-    var btn = e.target.closest('button');
-    if (!btn) return;
-    state.pattern = btn.dataset.pattern;
-    Array.prototype.forEach.call(patternSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b === btn));
-    });
-    patternOptsRow.hidden = state.pattern === 'none';
-    render();
+    persistDebounced();
   });
 
-  patternColor.addEventListener('input', function () { state.patternColor = patternColor.value; render(); });
+  fontAutoFit.addEventListener('change', function () {
+    state.fontAutoFit = fontAutoFit.checked;
+    fontSize.disabled = state.fontAutoFit;
+    render();
+    persist();
+  });
+
+  textColor.addEventListener('input', function () { state.textColor = textColor.value; render(); persistDebounced(); });
+
+  patternSelect.addEventListener('change', function () {
+    state.pattern = patternSelect.value;
+    patternControls.hidden = state.pattern === 'none';
+    btnShuffleNoise.hidden = state.pattern !== 'noise';
+    render();
+    persist();
+  });
+
+  patternColor.addEventListener('input', function () { state.patternColor = patternColor.value; render(); persistDebounced(); });
   patternOpacity.addEventListener('input', function () {
     state.patternOpacity = Number(patternOpacity.value);
-    patternOpacityVal.textContent = state.patternOpacity;
+    patternOpacityLabel.textContent = state.patternOpacity + '%';
     render();
+    persistDebounced();
   });
+  patternDensity.addEventListener('input', function () {
+    state.patternDensity = Number(patternDensity.value);
+    patternDensityLabel.textContent = state.patternDensity + '%';
+    render();
+    persistDebounced();
+  });
+
+  function shuffleNoise() {
+    state.noiseSeed = Math.floor(Math.random() * 2147483647) || 1;
+    render();
+    persist();
+    WUS.toast('Noise pattern shuffled');
+  }
+  btnShuffleNoise.addEventListener('click', shuffleNoise);
 
   function downloadPng() {
     canvas.toBlob(function (blob) {
       if (!blob) { WUS.toast('Could not generate PNG', 'error'); return; }
-      var name = 'placeholder-' + state.width + 'x' + state.height + '.png';
+      var name = 'placeholder-' + state.width + 'x' + state.height + '-' + Date.now() + '.png';
       WUS.download(name, blob, 'image/png');
       WUS.toast('Downloaded ' + name);
     }, 'image/png');
   }
-
   btnDownload.addEventListener('click', downloadPng);
 
   function resetAll() {
-    state = {
-      width: 300, height: 200, bgMode: 'solid', bgColor: '#6366f1',
-      gradColor1: '#6366f1', gradColor2: '#ec4899', gradAngle: 45,
-      text: '', textDirty: false, fontFamily: "'Segoe UI', Arial, sans-serif",
-      fontSize: 0, textColor: '#ffffff', pattern: 'none',
-      patternColor: '#ffffff', patternOpacity: 20
-    };
-    widthInput.value = 300; heightInput.value = 200;
-    bgColor.value = state.bgColor;
-    gradColor1.value = state.gradColor1; gradColor2.value = state.gradColor2;
-    gradAngle.value = state.gradAngle; gradAngleVal.textContent = state.gradAngle;
-    textInput.value = ''; textInput.placeholder = defaultText();
-    fontFamily.value = state.fontFamily;
-    fontSize.value = 0; fontSizeVal.textContent = '(auto)';
-    textColor.value = state.textColor;
-    patternColor.value = state.patternColor;
-    patternOpacity.value = state.patternOpacity; patternOpacityVal.textContent = state.patternOpacity;
-
-    Array.prototype.forEach.call(bgModeSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.mode === 'solid'));
-    });
-    bgSolidRow.hidden = false; bgGradientRow.hidden = true;
-
-    Array.prototype.forEach.call(patternSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.pattern === 'none'));
-    });
-    patternOptsRow.hidden = true;
-
+    state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+    state.noiseSeed = Math.floor(Math.random() * 2147483647) || 1;
+    applyStateToInputs();
     render();
+    WUS.store.remove(STORE_KEY);
     WUS.toast('Reset to defaults');
   }
+  btnResetAll.addEventListener('click', resetAll);
 
-  btnReset.addEventListener('click', resetAll);
-
-  btnCopyImg.addEventListener('click', function () { WUS.copy(imgSnippet.textContent, 'img snippet copied'); });
-  btnCopyCss.addEventListener('click', function () { WUS.copy(cssSnippet.textContent, 'CSS snippet copied'); });
+  btnCopyImg.addEventListener('click', function () {
+    if (!lastImgTag) { WUS.toast('Nothing to copy yet', 'error'); return; }
+    WUS.copy(lastImgTag, '<img> tag copied to clipboard');
+  });
+  btnCopyCss.addEventListener('click', function () {
+    if (!lastCssSnippet) { WUS.toast('Nothing to copy yet', 'error'); return; }
+    WUS.copy(lastCssSnippet, 'CSS snippet copied to clipboard');
+  });
 
   /* ============================ PERSISTENCE ============================ */
   function persist() {
@@ -331,39 +483,13 @@
 
   function restore() {
     var saved = WUS.store.get(STORE_KEY, null);
-    if (!saved) { textInput.placeholder = defaultText(); render(); return; }
-    state = Object.assign({}, state, saved);
-
-    widthInput.value = state.width; heightInput.value = state.height;
-    bgColor.value = state.bgColor;
-    gradColor1.value = state.gradColor1; gradColor2.value = state.gradColor2;
-    gradAngle.value = state.gradAngle; gradAngleVal.textContent = state.gradAngle;
-    textInput.value = state.textDirty ? state.text : '';
-    textInput.placeholder = defaultText();
-    fontFamily.value = state.fontFamily;
-    fontSize.value = state.fontSize; fontSizeVal.textContent = state.fontSize > 0 ? state.fontSize + 'px' : '(auto)';
-    textColor.value = state.textColor;
-    patternColor.value = state.patternColor;
-    patternOpacity.value = state.patternOpacity; patternOpacityVal.textContent = state.patternOpacity;
-
-    Array.prototype.forEach.call(bgModeSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.mode === state.bgMode));
-    });
-    bgSolidRow.hidden = state.bgMode !== 'solid';
-    bgGradientRow.hidden = state.bgMode !== 'gradient';
-
-    Array.prototype.forEach.call(patternSeg.querySelectorAll('button'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.pattern === state.pattern));
-    });
-    patternOptsRow.hidden = state.pattern === 'none';
-
+    state = Object.assign({}, DEFAULT_STATE, saved || {});
+    if (!state.noiseSeed) state.noiseSeed = 1;
+    state.width = clamp(Number(state.width) || DEFAULT_STATE.width, 1, 4096);
+    state.height = clamp(Number(state.height) || DEFAULT_STATE.height, 1, 4096);
+    applyStateToInputs();
     render();
   }
-
-  /* Re-render on input changes should also persist (debounced for text). */
-  textInput.addEventListener('input', persistDebounced);
-  widthInput.addEventListener('input', persistDebounced);
-  heightInput.addEventListener('input', persistDebounced);
 
   /* =========================== SHORTCUTS HELP =========================== */
   var helpBackdrop = document.getElementById('helpBackdrop');
@@ -372,6 +498,7 @@
 
   var SHORTCUTS = [
     { keys: ['mod', 'S'], desc: 'Download PNG' },
+    { keys: ['mod', 'Shift', 'R'], desc: 'Shuffle noise pattern' },
     { keys: ['?'], desc: 'Show this help' },
     { keys: ['Esc'], desc: 'Close dialog' }
   ];
@@ -389,7 +516,9 @@
   function closeHelp() { helpBackdrop.hidden = true; }
 
   helpClose.addEventListener('click', closeHelp);
-  helpBackdrop.addEventListener('click', function (e) { if (e.target === helpBackdrop) closeHelp(); });
+  helpBackdrop.addEventListener('click', function (e) {
+    if (e.target === helpBackdrop) closeHelp();
+  });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !helpBackdrop.hidden) closeHelp();
   });
@@ -398,6 +527,9 @@
   for (var i = 0; i < helpBtns.length; i++) helpBtns[i].addEventListener('click', openHelp);
 
   WUS.registerShortcut('mod+s', function () { downloadPng(); }, 'Download PNG');
+  WUS.registerShortcut('mod+r', function () {
+    if (state.pattern === 'noise') shuffleNoise();
+  }, 'Shuffle noise pattern');
   WUS.registerShortcut('?', function () { openHelp(); }, 'Show shortcuts');
 
   /* ================================ INIT ================================ */

@@ -4,16 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#08090d">
-  <meta name="description" content="Generate placeholder images entirely in your browser via canvas — custom size, solid or gradient background, text overlay, patterns, PNG download. No third-party placeholder API, no network calls.">
-  <title>Placeholder Image Generator — Web Utility Suite</title>
+  <meta name="description" content="Generate placeholder images entirely in your browser via canvas — solid or gradient backgrounds, text overlay, stripe/grid/noise patterns, PNG download plus img/CSS snippet export. No network calls, no dependencies.">
+  <title>Placeholder Image Generator Pro — Web Utility Suite</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="assets/css/base.css">
   <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
   <header class="topbar container">
-    <a class="brand" href="https://github.com/kasapdev/web-utility-suite" aria-label="Back to Web Utility Suite">
+    <a class="brand" href="https://github.com/kasapdev/placeholder-image-generator-pro" aria-label="Back to Placeholder Image Generator Pro">
       <span class="logo" aria-hidden="true">
+        <!-- image icon -->
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2"/>
           <circle cx="8.5" cy="8.5" r="1.5"/>
@@ -27,9 +28,7 @@
     </a>
     <span class="spacer"></span>
 
-    <span id="statusBadge" class="badge" role="status" aria-live="polite" title="Canvas size">
-      <span class="status-dot" aria-hidden="true"></span><span id="statusText">300 × 200</span>
-    </span>
+    <span id="dimsBadge" class="badge mono" role="status" aria-live="polite" title="Current output size">300 × 200 · — KB</span>
 
     <button class="btn btn--icon" data-shortcut-help title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -49,156 +48,211 @@
   </header>
 
   <main class="container">
-    <div class="layout">
-      <!-- Controls -->
-      <section class="panel controls-panel fade-in" aria-label="Controls">
-        <div class="field">
-          <label>Size presets</label>
-          <div class="preset-grid" id="presetGrid">
-            <button type="button" class="btn btn--sm preset-btn" data-w="150" data-h="150">150×150</button>
-            <button type="button" class="btn btn--sm preset-btn" data-w="300" data-h="200">300×200</button>
-            <button type="button" class="btn btn--sm preset-btn" data-w="640" data-h="360">640×360</button>
-            <button type="button" class="btn btn--sm preset-btn" data-w="800" data-h="600">800×600</button>
-            <button type="button" class="btn btn--sm preset-btn" data-w="1200" data-h="630">1200×630 (social)</button>
-            <button type="button" class="btn btn--sm preset-btn" data-w="1920" data-h="1080">1920×1080</button>
-          </div>
-        </div>
-
-        <div class="row wrap gap-3">
-          <div class="field flex-1">
-            <label for="widthInput">Width (px)</label>
-            <input type="number" id="widthInput" min="1" max="4000" value="300">
-          </div>
-          <div class="field flex-1">
-            <label for="heightInput">Height (px)</label>
-            <input type="number" id="heightInput" min="1" max="4000" value="200">
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Background</label>
-          <div class="segmented" id="bgModeSeg" role="tablist" aria-label="Background mode">
-            <button type="button" data-mode="solid" aria-selected="true">Solid</button>
-            <button type="button" data-mode="gradient" aria-selected="false">Gradient</button>
-          </div>
-        </div>
-
-        <div class="row wrap gap-3" id="bgSolidRow">
-          <div class="field">
-            <label for="bgColor">Background color</label>
-            <input type="color" id="bgColor" value="#6366f1">
-          </div>
-        </div>
-
-        <div class="row wrap gap-3" id="bgGradientRow" hidden>
-          <div class="field">
-            <label for="gradColor1">Color 1</label>
-            <input type="color" id="gradColor1" value="#6366f1">
-          </div>
-          <div class="field">
-            <label for="gradColor2">Color 2</label>
-            <input type="color" id="gradColor2" value="#ec4899">
-          </div>
-          <div class="field flex-1">
-            <label for="gradAngle">Angle (deg): <span id="gradAngleVal">45</span>°</label>
-            <input type="range" id="gradAngle" min="0" max="360" value="45">
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="textInput">Overlay text</label>
-          <input type="text" id="textInput" placeholder="300 × 200">
-        </div>
-
-        <div class="row wrap gap-3">
-          <div class="field flex-1">
-            <label for="fontFamily">Font</label>
-            <select id="fontFamily">
-              <option value="'Segoe UI', Arial, sans-serif">Sans-serif</option>
-              <option value="Georgia, 'Times New Roman', serif">Serif</option>
-              <option value="'Courier New', Consolas, monospace">Monospace</option>
-              <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-              <option value="Impact, 'Arial Narrow', sans-serif">Impact</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="fontSize">Font size <span id="fontSizeVal">(auto)</span></label>
-            <input type="range" id="fontSize" min="8" max="200" value="0">
-          </div>
-          <div class="field">
-            <label for="textColor">Text color</label>
-            <input type="color" id="textColor" value="#ffffff">
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Pattern overlay</label>
-          <div class="segmented" id="patternSeg" role="tablist" aria-label="Pattern overlay">
-            <button type="button" data-pattern="none" aria-selected="true">None</button>
-            <button type="button" data-pattern="stripes" aria-selected="false">Stripes</button>
-            <button type="button" data-pattern="grid" aria-selected="false">Grid</button>
-            <button type="button" data-pattern="noise" aria-selected="false">Noise</button>
-          </div>
-        </div>
-
-        <div class="row wrap gap-3" id="patternOptsRow" hidden>
-          <div class="field">
-            <label for="patternColor">Pattern color</label>
-            <input type="color" id="patternColor" value="#ffffff">
-          </div>
-          <div class="field flex-1">
-            <label for="patternOpacity">Opacity: <span id="patternOpacityVal">20</span>%</label>
-            <input type="range" id="patternOpacity" min="0" max="100" value="20">
-          </div>
-        </div>
-
-        <div class="row wrap gap-2" style="margin-top:var(--space-2)">
-          <button id="btnDownload" class="btn btn--primary" title="Download PNG (Ctrl/Cmd+S)">
+    <!-- Live preview -->
+    <section class="panel preview-panel rise" aria-label="Live preview">
+      <div class="preview-canvas-wrap">
+        <canvas id="previewCanvas" width="300" height="200" aria-label="Generated placeholder image preview"></canvas>
+      </div>
+      <div class="preview-meta row between center wrap">
+        <span class="muted" id="previewHint">Updates live as you change any setting below.</span>
+        <div class="row gap-2 wrap">
+          <button type="button" id="btnResetAll" class="btn btn--sm btn--ghost" title="Reset all settings to defaults">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+            Reset
+          </button>
+          <button type="button" id="btnDownload" class="btn btn--primary" title="Download PNG (Ctrl/Cmd+S)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Download PNG
           </button>
-          <button id="btnReset" class="btn btn--ghost" title="Reset to defaults">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
-            Reset
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="controls-grid">
+      <!-- Dimensions -->
+      <div class="panel controls-panel fade-in" aria-label="Dimensions">
+        <h2 class="panel-title">Dimensions</h2>
+        <div class="field">
+          <label>Presets</label>
+          <div class="preset-row" id="presetRow">
+            <button type="button" class="btn btn--sm preset-btn" data-w="150" data-h="150">150×150</button>
+            <button type="button" class="btn btn--sm preset-btn" data-w="300" data-h="200">300×200</button>
+            <button type="button" class="btn btn--sm preset-btn" data-w="640" data-h="480">640×480</button>
+            <button type="button" class="btn btn--sm preset-btn" data-w="800" data-h="400">800×400</button>
+            <button type="button" class="btn btn--sm preset-btn" data-w="1200" data-h="630">1200×630</button>
+            <button type="button" class="btn btn--sm preset-btn" data-w="1920" data-h="1080">1920×1080</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Custom size (px)</label>
+          <div class="row gap-3 center wrap dim-row">
+            <div class="dim-input-group">
+              <label for="widthInput" class="secondary">Width</label>
+              <input type="number" id="widthInput" min="1" max="4096" value="300" inputmode="numeric">
+            </div>
+            <span class="dim-x muted" aria-hidden="true">×</span>
+            <div class="dim-input-group">
+              <label for="heightInput" class="secondary">Height</label>
+              <input type="number" id="heightInput" min="1" max="4096" value="200" inputmode="numeric">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Background -->
+      <div class="panel controls-panel fade-in" aria-label="Background">
+        <h2 class="panel-title">Background</h2>
+        <div class="field">
+          <div class="segmented" role="tablist" aria-label="Background type">
+            <button type="button" id="bgTypeSolid" role="tab" aria-selected="true" class="is-active" data-bgtype="solid">Solid</button>
+            <button type="button" id="bgTypeGradient" role="tab" aria-selected="false" data-bgtype="gradient">Gradient</button>
+          </div>
+        </div>
+
+        <div id="solidControls" class="control-block">
+          <div class="field">
+            <label for="solidColor">Color</label>
+            <input type="color" id="solidColor" value="#6366f1">
+          </div>
+        </div>
+
+        <div id="gradientControls" class="control-block" hidden>
+          <div class="row gap-3 wrap">
+            <div class="field flex-1">
+              <label for="gradColor1">Color 1</label>
+              <input type="color" id="gradColor1" value="#6366f1">
+            </div>
+            <div class="field flex-1">
+              <label for="gradColor2">Color 2</label>
+              <input type="color" id="gradColor2" value="#d946ef">
+            </div>
+          </div>
+          <div class="field">
+            <label for="gradAngle">Angle <span id="gradAngleLabel" class="mono muted">135°</span></label>
+            <div class="row center gap-3">
+              <input type="range" id="gradAngle" min="0" max="360" step="1" value="135" aria-label="Gradient angle in degrees">
+              <input type="number" id="gradAngleNumber" min="0" max="360" step="1" value="135" class="angle-number mono" aria-label="Gradient angle numeric input">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Text overlay -->
+      <div class="panel controls-panel fade-in" aria-label="Text overlay">
+        <h2 class="panel-title">Text overlay</h2>
+        <div class="field">
+          <div class="row between center">
+            <label for="textInput">Text</label>
+            <label class="check auto-text-check" title="Keep text in sync with width × height">
+              <span class="switch">
+                <input type="checkbox" id="textAutoToggle" checked aria-label="Auto-generate text from dimensions">
+                <span class="track"></span><span class="thumb"></span>
+              </span>
+              <span class="secondary">Auto</span>
+            </label>
+          </div>
+          <input type="text" id="textInput" value="300 × 200" maxlength="200" aria-label="Overlay text">
+        </div>
+        <div class="row gap-3 wrap">
+          <div class="field flex-1 font-family-field">
+            <label for="fontFamily">Font</label>
+            <select id="fontFamily" aria-label="Font family">
+              <option value="Arial, Helvetica, sans-serif" selected>Arial</option>
+              <option value="'Helvetica Neue', Helvetica, sans-serif">Helvetica</option>
+              <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+              <option value="'Times New Roman', Times, serif">Times New Roman</option>
+              <option value="'Courier New', Courier, monospace">Courier New</option>
+              <option value="Verdana, Geneva, sans-serif">Verdana</option>
+              <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            </select>
+          </div>
+          <div class="field font-size-field">
+            <label for="fontSize">Size (px)</label>
+            <input type="number" id="fontSize" min="8" max="400" value="28" class="font-size-input" disabled>
+          </div>
+          <div class="field text-color-field">
+            <label for="textColor">Color</label>
+            <input type="color" id="textColor" value="#ffffff">
+          </div>
+        </div>
+        <label class="check">
+          <span class="switch">
+            <input type="checkbox" id="fontAutoFit" checked aria-label="Auto-fit text size to width">
+            <span class="track"></span><span class="thumb"></span>
+          </span>
+          <span class="secondary">Auto-fit size to width</span>
+        </label>
+      </div>
+
+      <!-- Pattern overlay -->
+      <div class="panel controls-panel fade-in" aria-label="Pattern overlay">
+        <h2 class="panel-title">Pattern overlay</h2>
+        <div class="field">
+          <label for="patternSelect">Pattern</label>
+          <select id="patternSelect" aria-label="Pattern overlay type">
+            <option value="none">None</option>
+            <option value="stripes">Diagonal stripes</option>
+            <option value="grid">Grid</option>
+            <option value="noise">Noise dots</option>
+          </select>
+        </div>
+        <div id="patternControls" class="control-block" hidden>
+          <div class="row gap-3 wrap">
+            <div class="field flex-1">
+              <label for="patternColor">Color</label>
+              <input type="color" id="patternColor" value="#ffffff">
+            </div>
+            <div class="field flex-1">
+              <label for="patternOpacity">Opacity <span id="patternOpacityLabel" class="mono muted">25%</span></label>
+              <input type="range" id="patternOpacity" min="0" max="100" step="1" value="25" aria-label="Pattern opacity percent">
+            </div>
+          </div>
+          <div class="field">
+            <label for="patternDensity">Density <span id="patternDensityLabel" class="mono muted">50%</span></label>
+            <input type="range" id="patternDensity" min="1" max="100" step="1" value="50" aria-label="Pattern density percent">
+          </div>
+          <button type="button" id="btnShuffleNoise" class="btn btn--sm btn--ghost" hidden title="Regenerate noise dot positions (Ctrl/Cmd+R)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+            Shuffle noise
           </button>
         </div>
-      </section>
-
-      <!-- Preview + snippets -->
-      <div class="col gap-6">
-        <section class="panel preview-panel rise" aria-label="Preview">
-          <div class="pane-head">
-            <h2 class="pane-title">Preview</h2>
-            <span id="dimsMeta" class="muted pane-meta mono">300 × 200</span>
-          </div>
-          <div class="canvas-wrap">
-            <canvas id="canvas" width="300" height="200" aria-label="Generated placeholder image preview"></canvas>
-          </div>
-        </section>
-
-        <section class="panel snippet-panel fade-in" aria-label="Snippets">
-          <div class="pane-head">
-            <h2 class="pane-title">&lt;img&gt; snippet</h2>
-            <button id="btnCopyImg" class="btn btn--sm" title="Copy img tag">Copy</button>
-          </div>
-          <pre id="imgSnippet" class="output-code mono" tabindex="0"></pre>
-        </section>
-
-        <section class="panel snippet-panel fade-in" aria-label="CSS snippet">
-          <div class="pane-head">
-            <h2 class="pane-title">CSS snippet</h2>
-            <button id="btnCopyCss" class="btn btn--sm" title="Copy CSS snippet">Copy</button>
-          </div>
-          <pre id="cssSnippet" class="output-code mono" tabindex="0"></pre>
-        </section>
       </div>
-    </div>
+    </section>
+
+    <!-- Copy-paste snippets -->
+    <section class="panel snippets-panel fade-in" aria-label="Copy-paste snippets">
+      <h2 class="panel-title">Snippets</h2>
+
+      <div class="snippet-block">
+        <div class="row between center">
+          <label class="secondary">&lt;img&gt; tag (PNG data URI)</label>
+          <button type="button" id="btnCopyImg" class="btn btn--sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy
+          </button>
+        </div>
+        <pre id="imgSnippet" class="snippet-code mono" tabindex="0" aria-live="polite"></pre>
+      </div>
+
+      <div class="snippet-block">
+        <div class="row between center">
+          <label class="secondary">CSS background (no image)</label>
+          <button type="button" id="btnCopyCss" class="btn btn--sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            Copy
+          </button>
+        </div>
+        <pre id="cssSnippet" class="snippet-code mono" tabindex="0" aria-live="polite"></pre>
+      </div>
+    </section>
   </main>
 
   <footer class="app-footer container">
-    Part of the <a href="https://github.com/kasapdev/web-utility-suite">Web Utility Suite</a> · MIT Licensed
+    Part of the <a href="https://github.com/kasapdev/placeholder-image-generator-pro">Web Utility Suite</a> · MIT Licensed
   </footer>
 
+  <!-- Shortcuts help modal -->
   <div id="helpBackdrop" class="modal-backdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
       <div class="row between center" style="margin-bottom:var(--space-4)">
