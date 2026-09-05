@@ -527,7 +527,7 @@
   for (var i = 0; i < helpBtns.length; i++) helpBtns[i].addEventListener('click', openHelp);
 
   WUS.registerShortcut('mod+s', function () { downloadPng(); }, 'Download PNG');
-  WUS.registerShortcut('mod+r', function () {
+  WUS.registerShortcut('mod+shift+r', function () {
     if (state.pattern === 'noise') shuffleNoise();
   }, 'Shuffle noise pattern');
   WUS.registerShortcut('?', function () { openHelp(); }, 'Show shortcuts');
