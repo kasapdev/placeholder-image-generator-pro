@@ -528,7 +528,11 @@
 
   WUS.registerShortcut('mod+s', function () { downloadPng(); }, 'Download PNG');
   WUS.registerShortcut('mod+shift+r', function () {
-    if (state.pattern === 'noise') shuffleNoise();
+    if (state.pattern === 'noise') {
+      shuffleNoise();
+    } else {
+      WUS.toast('Select the Noise pattern to shuffle it', 'error');
+    }
   }, 'Shuffle noise pattern');
   WUS.registerShortcut('?', function () { openHelp(); }, 'Show shortcuts');
 
